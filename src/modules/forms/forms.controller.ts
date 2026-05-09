@@ -7,25 +7,27 @@ import {
   Get,
   Put,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { FormsService } from './forms.service';
 import { CreateFormDto } from './dto/create-form.dto';
 import { UpdateFormDto } from './dto/update-form.dto';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 @ApiTags('Forms')
 @Controller('forms')
 export class FormsController {
   constructor(private readonly formsService: FormsService) {}
 
-  @ApiOperation({ summary: 'Get all forms' })
+  @ApiOperation({ summary: 'Get all forms (paginated)' })
   @ApiResponse({
     status: 200,
     description: 'List of all forms retrieved successfully',
   })
   @Get()
-  findAll() {
-    return this.formsService.findAll();
+  findAll(@Query() pagination: PaginationDto) {
+    return this.formsService.findAll(pagination);
   }
 
   @ApiOperation({ summary: 'Create a new form' })
@@ -51,8 +53,9 @@ export class FormsController {
   @ApiResponse({ status: 200, description: 'Form retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Form not found' })
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.formsService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    const data = await this.formsService.findOne(id);
+    return { status: 'success', message: 'Form retrieved successfully', data };
   }
 
   @ApiOperation({ summary: 'Update a form by ID' })

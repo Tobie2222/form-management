@@ -1,11 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Form } from 'src/entities/form.entity';
+import { Field } from 'src/entities/field.entity';
 import { Repository } from 'typeorm';
 import { FieldsService } from '../fields/fields.service';
 import { FormStatus } from 'src/enums/form.enums';
 import { CreateFormDto } from './dto/create-form.dto';
 import { UpdateFormDto } from './dto/update-form.dto';
+import { PaginationDto } from 'src/common/dto/pagination.dto';
 
 @Injectable()
 export class FormsService {
@@ -15,8 +17,16 @@ export class FormsService {
     private readonly fieldsService: FieldsService,
   ) {}
 
-  async findAll() {
-    const forms = await this.formRepository.find({ order: { order: 'ASC' } });
+  async findAll(pagination?: PaginationDto) {
+    const page = pagination?.page ?? 1;
+    const limit = pagination?.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const [forms, total] = await this.formRepository.findAndCount({
+      order: { order: 'ASC' },
+      skip,
+      take: limit,
+    });
 
     const data = await Promise.all(
       forms.map(async (form) => ({
@@ -29,6 +39,12 @@ export class FormsService {
       status: 'success',
       message: 'Forms retrieved successfully',
       data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
@@ -52,22 +68,15 @@ export class FormsService {
     };
   }
 
-  async findOne(id: number) {
+  async findOne(id: number): Promise<Form & { fields: Field[] }> {
     const form = await this.formRepository.findOne({ where: { id } });
 
     if (!form) {
-      return {
-        status: 'error',
-        message: 'Form not found',
-      };
+      throw new NotFoundException(`Form #${id} không tồn tại`);
     }
-    const fields = await this.fieldsService.findByFormId(form.id);
 
-    return {
-      status: 'success',
-      message: 'Form retrieved successfully',
-      data: { ...form, fields },
-    };
+    const fields = await this.fieldsService.findByFormId(form.id);
+    return { ...form, fields };
   }
 
   async create(createFormDto: CreateFormDto) {
@@ -82,32 +91,18 @@ export class FormsService {
   }
 
   async update(id: number, updateFormDto: UpdateFormDto) {
-    const form = await this.formRepository.findOne({ where: { id } });
-
-    if (!form) {
-      return {
-        status: 'error',
-        message: 'Form not found',
-      };
-    }
-
+    await this.findOne(id);
     await this.formRepository.update(id, updateFormDto);
+    const updated = await this.findOne(id);
     return {
       status: 'success',
       message: 'Form updated successfully',
+      data: updated,
     };
   }
 
   async delete(id: number) {
-    const form = await this.formRepository.findOne({ where: { id } });
-
-    if (!form) {
-      return {
-        status: 'error',
-        message: 'Form not found',
-      };
-    }
-
+    await this.findOne(id);
     await this.formRepository.softDelete(id);
     return {
       status: 'success',
